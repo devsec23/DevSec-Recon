@@ -1,43 +1,67 @@
 #!/bin/bash
 
-echo -e "\033[1;32m
-██████╗ ███████╗████████╗███████╗██████╗ ███████╗███████╗
-██╔══██╗██╔════╝╚══██╔══╝██╔════╝██╔══██╗██╔════╝██╔════╝
-██████╔╝███████╗   ██║   █████╗  ██████╔╝███████╗███████╗
-██╔═══╝ ██╔════╝   ██║   ██╔══╝  ██╔═══╝ ╚════██╗╚════██╗
-██║     ███████╗   ██║   ███████╗██║     ███████╔╝██████╔╝
-╚═╝     ╚══════╝   ╚═╝   ╚══════╝╚═╝     ╚═════╝ ╚═════╝
-\033[0m"
+# Colors
+GREEN='\033[1;32m'
+NC='\033[0m'
 
+# Spinner function
+spinner() {
+    local pid=$!
+    local delay=0.1
+    local spinstr='|/-\'
+    local msg="$1"
+    echo -ne "${GREEN}[~] $msg... ${NC}"
+    while ps a | awk '{print $1}' | grep -q "$pid"; do
+        local temp=${spinstr#?}
+        printf " [%c]  " "$spinstr"
+        local spinstr=$temp${spinstr%"$temp"}
+        sleep $delay
+        printf "\b\b\b\b\b\b"
+    done
+    echo -ne "\b\b\b\b\b\b"
+    echo -e "${GREEN}Done!${NC}"
+}
+
+# Banner
+clear
+echo -e "${GREEN}"
+echo "██████╗ ███████╗████████╗███████╗██████╗ ███████╗███████╗"
+echo "██╔══██╗██╔════╝╚══██╔══╝██╔════╝██╔══██╗██╔════╝██╔════╝"
+echo "██████╔╝███████╗   ██║   █████╗  ██████╔╝███████╗███████╗"
+echo "██╔═══╝ ██╔════╝   ██║   ██╔══╝  ██╔═══╝ ╚════██╗╚════██╗"
+echo "██║     ███████╗   ██║   ███████╗██║     ███████╔╝██████╔╝"
+echo "╚═╝     ╚══════╝   ╚═╝   ╚══════╝╚═╝     ╚═════╝ ╚═════╝"
+echo -e "${NC}"
+
+# Input
 read -p "Enter domain name: " domain
-mkdir -p results
+mkdir -p tools results
 
+# Install Tool Function
 install_tool() {
     tool=$1
-    repo=$2
+    install_cmd=$2
     if ! command -v "$tool" &> /dev/null; then
-        echo "[!] $tool not found, installing..."
-        go install "$repo@latest"
-        export PATH=$PATH:$(go env GOPATH)/bin
+        (eval "$install_cmd") & spinner "Installing $tool"
     fi
 }
 
-install_tool subfinder github.com/projectdiscovery/subfinder/v2/cmd/subfinder
-install_tool httpx github.com/projectdiscovery/httpx/cmd/httpx
-install_tool gau github.com/lc/gau/v2/cmd/gau
+# Tool Installation
+install_tool "subfinder" "go install -v github.com/projectdiscovery/subfinder/v2/cmd/subfinder@latest && mv ~/go/bin/subfinder /usr/local/bin/"
+install_tool "httpx" "go install -v github.com/projectdiscovery/httpx/cmd/httpx@latest && mv ~/go/bin/httpx /usr/local/bin/"
+install_tool "gau" "go install -v github.com/lc/gau/v2/cmd/gau@latest && mv ~/go/bin/gau /usr/local/bin/"
 
-echo -e "\n[+] Running subfinder..."
-subfinder -d "$domain" -silent -o results/subdomains.txt
+# Run subfinder (silent)
+echo -e "${GREEN}[+] Running subfinder...${NC}"
+subfinder -d "$domain" -silent > results/subdomains.txt
 
-if [[ ! -s results/subdomains.txt ]]; then
-    echo "[-] No subdomains found."
-    exit 1
-fi
+# Run httpx
+echo -e "${GREEN}[+] Running httpx...${NC}"
+httpx -l results/subdomains.txt -silent -status-code -title > results/httpx_output.txt
 
-echo -e "\n[+] Running httpx..."
-httpx -list results/subdomains.txt -silent -o results/httpx_output.txt
+# Run gau
+echo -e "${GREEN}[+] Running gau...${NC}"
+gau "$domain" > results/gau_output.txt
 
-echo -e "\n[+] Running gau..."
-gau "$domain" --o results/gau_output.txt
-
-echo -e "\n\033[1;34m[✓] Recon completed. Results saved in the 'results' folder.\033[0m"
+# Done
+echo -e "${GREEN}[✓] Recon completed. Results saved in 'results/' folder.${NC}"
