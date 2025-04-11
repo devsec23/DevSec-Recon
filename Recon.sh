@@ -1,33 +1,50 @@
 #!/bin/bash
 
+# Display logo
+echo -e "\033[1;32m
+██████╗ ███████╗████████╗███████╗██████╗ ███████╗███████╗
+██╔══██╗██╔════╝╚══██╔══╝██╔════╝██╔══██╗██╔════╝██╔════╝
+██████╔╝███████╗   ██║   █████╗  ██████╔╝███████╗███████╗
+██╔═══╝ ██╔════╝   ██║   ██╔══╝  ██╔═══╝ ╚════██╗╚════██╗
+██║     ███████╗   ██║   ███████╗██║     ███████╔╝██████╔╝
+╚═╝     ╚══════╝   ╚═╝   ╚══════╝╚═╝     ╚═════╝ ╚═════╝
+\033[0m"
 
-logo() { echo -e "\e[1;34m ██████╗ ███████╗██╗   ██╗███████╗███████╗███████╗ ██████╗ ██╔══██╗██╔════╝╚██╗ ██╔╝██╔════╝██╔════╝██╔════╝██╔═══██╗ ██║  ██║█████╗   ╚████╔╝ █████╗  █████╗  █████╗  ██║   ██║ ██║  ██║██╔══╝    ╚██╔╝  ██╔══╝  ██╔══╝  ██╔══╝  ██║   ██║ ██████╔╝███████╗   ██║   ███████╗███████╗███████╗╚██████╔╝ ╚═════╝ ╚══════╝   ╚═╝   ╚══════╝╚══════╝╚══════╝ ╚═════╝ \e[1;33mby devsec_recon\e[0m " }
+# Check if subfinder is installed
+if ! command -v subfinder &> /dev/null
+then
+    echo "subfinder is not installed. Installing..."
+    go install github.com/projectdiscovery/subfinder/v2/cmd/subfinder@latest
+fi
 
+# Check if httpx is installed
+if ! command -v httpx &> /dev/null
+then
+    echo "httpx is not installed. Installing..."
+    go install github.com/projectdiscovery/httpx/cmd/httpx@latest
+fi
 
+# Check if gau is installed
+if ! command -v gau &> /dev/null
+then
+    echo "gau is not installed. Installing..."
+    go install github.com/lc/gau/v2/cmd/gau@latest
+fi
 
-check_tool() { if ! command -v $1 &> /dev/null; then echo -e "\e[1;31m[!] $1 غير مثبت، يتم تثبيته...\e[0m" go install github.com/projectdiscovery/$1/cmd/$1@latest || apt install -y $1 || echo "$1 لم يتم تثبيته." else echo -e "\e[1;32m[+] $1 مثبت بالفعل\e[0m" fi }
+# Create a directory for results if it doesn't exist
+mkdir -p results
 
-TOOLS=(subfinder httpx gau)
+# Gather subdomains
+echo "Running subfinder..."
+subfinder -d example.com -o results/subdomains.txt
 
-for tool in "${TOOLS[@]}"; do check_tool $tool done
+# Check HTTP endpoints with httpx
+echo "Running httpx..."
+httpx -l results/subdomains.txt -o results/httpx_output.txt
 
+# Fetch URLs with gau
+echo "Running gau..."
+gau example.com -o results/gau_output.txt
 
-
-TARGET=$1 OUT_DIR="results" mkdir -p $OUT_DIR
-
-echo -e "\e[1;34m[*] بدء عملية recon على: $TARGET\e[0m"
-
-
-
-subfinder -d $TARGET -all -silent -o $OUT_DIR/subdomains.txt
-
-
-
-httpx -l $OUT_DIR/subdomains.txt -silent -o $OUT_DIR/online.txt
-
-
-
-gau --threads 5 -o $OUT_DIR/urls.txt $TARGET
-
-echo -e "\e[1;32m[+] الانتهاء من الفحص. النتائج محفوظة في مجلد $OUT_DIR\e[0m"
-
+# Summary
+echo -e "\033[1;34m[INFO] Recon completed. Results saved in the 'results' directory.\033[0m"
