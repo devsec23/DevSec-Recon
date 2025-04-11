@@ -1,6 +1,5 @@
 #!/bin/bash
 
-# عرض شعار الأداة
 echo -e "\033[1;32m
 ██████╗ ███████╗████████╗███████╗██████╗ ███████╗███████╗
 ██╔══██╗██╔════╝╚══██╔══╝██╔════╝██╔══██╗██╔════╝██╔════╝
@@ -10,31 +9,35 @@ echo -e "\033[1;32m
 ╚═╝     ╚══════╝   ╚═╝   ╚══════╝╚═╝     ╚═════╝ ╚═════╝
 \033[0m"
 
-# المجال الهدف
-read -p "أدخل اسم النطاق (domain): " domain
-
-# إنشاء مجلد النتائج
+read -p "Enter domain name: " domain
 mkdir -p results
 
-# التحقق من وجود الأدوات وتثبيتها إذا لزم الأمر
-for tool in subfinder httpx gau; do
-    if ! command -v $tool &> /dev/null; then
-        echo "$tool غير مثبت. سيتم تثبيته..."
-        go install github.com/projectdiscovery/$tool@latest 2>/dev/null || go install github.com/lc/gau/v2/cmd/gau@latest
+install_tool() {
+    tool=$1
+    repo=$2
+    if ! command -v "$tool" &> /dev/null; then
+        echo "[!] $tool not found, installing..."
+        go install "$repo@latest"
+        export PATH=$PATH:$(go env GOPATH)/bin
     fi
-done
+}
 
-# جمع السب دومينات
-echo -e "\n[+] تشغيل subfinder..."
+install_tool subfinder github.com/projectdiscovery/subfinder/v2/cmd/subfinder
+install_tool httpx github.com/projectdiscovery/httpx/cmd/httpx
+install_tool gau github.com/lc/gau/v2/cmd/gau
+
+echo -e "\n[+] Running subfinder..."
 subfinder -d "$domain" -silent -o results/subdomains.txt
 
-# فحص السيرفرات الحية
-echo -e "\n[+] تشغيل httpx..."
-cat results/subdomains.txt | httpx -silent -o results/httpx_output.txt
+if [[ ! -s results/subdomains.txt ]]; then
+    echo "[-] No subdomains found."
+    exit 1
+fi
 
-# جمع الروابط من الأرشيفات
-echo -e "\n[+] تشغيل gau..."
+echo -e "\n[+] Running httpx..."
+httpx -list results/subdomains.txt -silent -o results/httpx_output.txt
+
+echo -e "\n[+] Running gau..."
 gau "$domain" --o results/gau_output.txt
 
-# ملخص
-echo -e "\n\033[1;34m[✓] تم إكمال الفحص. النتائج محفوظة داخل مجلد 'results'.\033[0m"
+echo -e "\n\033[1;34m[✓] Recon completed. Results saved in the 'results' folder.\033[0m"
