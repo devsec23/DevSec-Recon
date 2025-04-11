@@ -1,6 +1,6 @@
 #!/bin/bash
 
-# Display logo
+# عرض شعار الأداة
 echo -e "\033[1;32m
 ██████╗ ███████╗████████╗███████╗██████╗ ███████╗███████╗
 ██╔══██╗██╔════╝╚══██╔══╝██╔════╝██╔══██╗██╔════╝██╔════╝
@@ -10,41 +10,31 @@ echo -e "\033[1;32m
 ╚═╝     ╚══════╝   ╚═╝   ╚══════╝╚═╝     ╚═════╝ ╚═════╝
 \033[0m"
 
-# Check if subfinder is installed
-if ! command -v subfinder &> /dev/null
-then
-    echo "subfinder is not installed. Installing..."
-    go install github.com/projectdiscovery/subfinder/v2/cmd/subfinder@latest
-fi
+# المجال الهدف
+read -p "أدخل اسم النطاق (domain): " domain
 
-# Check if httpx is installed
-if ! command -v httpx &> /dev/null
-then
-    echo "httpx is not installed. Installing..."
-    go install github.com/projectdiscovery/httpx/cmd/httpx@latest
-fi
-
-# Check if gau is installed
-if ! command -v gau &> /dev/null
-then
-    echo "gau is not installed. Installing..."
-    go install github.com/lc/gau/v2/cmd/gau@latest
-fi
-
-# Create a directory for results if it doesn't exist
+# إنشاء مجلد النتائج
 mkdir -p results
 
-# Gather subdomains
-echo "Running subfinder..."
-subfinder -d example.com -o results/subdomains.txt
+# التحقق من وجود الأدوات وتثبيتها إذا لزم الأمر
+for tool in subfinder httpx gau; do
+    if ! command -v $tool &> /dev/null; then
+        echo "$tool غير مثبت. سيتم تثبيته..."
+        go install github.com/projectdiscovery/$tool@latest 2>/dev/null || go install github.com/lc/gau/v2/cmd/gau@latest
+    fi
+done
 
-# Check HTTP endpoints with httpx
-echo "Running httpx..."
-httpx -l results/subdomains.txt -o results/httpx_output.txt
+# جمع السب دومينات
+echo -e "\n[+] تشغيل subfinder..."
+subfinder -d "$domain" -silent -o results/subdomains.txt
 
-# Fetch URLs with gau
-echo "Running gau..."
-gau example.com -o results/gau_output.txt
+# فحص السيرفرات الحية
+echo -e "\n[+] تشغيل httpx..."
+cat results/subdomains.txt | httpx -silent -o results/httpx_output.txt
 
-# Summary
-echo -e "\033[1;34m[INFO] Recon completed. Results saved in the 'results' directory.\033[0m"
+# جمع الروابط من الأرشيفات
+echo -e "\n[+] تشغيل gau..."
+gau "$domain" --o results/gau_output.txt
+
+# ملخص
+echo -e "\n\033[1;34m[✓] تم إكمال الفحص. النتائج محفوظة داخل مجلد 'results'.\033[0m"
