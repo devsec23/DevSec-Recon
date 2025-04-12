@@ -1,67 +1,63 @@
 #!/bin/bash
 
-# Colors
-GREEN='\033[1;32m'
-NC='\033[0m'
+# Show a fancy logo
+clear
+echo -e "\e[1;32m"
+echo "   ____            ____       _____        ____  "
+echo "  | __ )  ___  ___| __ ) ___ | ____|__  __| ___|"
+echo "  |  _ \ / _ \/ __|  _ \ / _ \|  _| / _|/ _|  _|"
+echo "  | |_) |  __/ (__| |_) | (_) | |__|  _|  __| |__"
+echo "  |____/ \___|\___|____/ \___/|____|_|  \___|\___|"
+echo -e "\e[0m"
 
-# Spinner function
-spinner() {
-    local pid=$!
-    local delay=0.1
-    local spinstr='|/-\'
-    local msg="$1"
-    echo -ne "${GREEN}[~] $msg... ${NC}"
-    while ps a | awk '{print $1}' | grep -q "$pid"; do
-        local temp=${spinstr#?}
-        printf " [%c]  " "$spinstr"
-        local spinstr=$temp${spinstr%"$temp"}
-        sleep $delay
-        printf "\b\b\b\b\b\b"
+# Function to show the progress bar
+progress_bar() {
+    local total=$1
+    local current=0
+    while [ $current -le $total ]; do
+        local progress=$((current * 100 / total))
+        printf "\r[%-50s] %d%%" "$(printf '#%.0s' $(seq 1 $((progress / 2))))" "$progress"
+        sleep 0.1
+        ((current++))
     done
-    echo -ne "\b\b\b\b\b\b"
-    echo -e "${GREEN}Done!${NC}"
+    echo
 }
 
-# Banner
-clear
-echo -e "${GREEN}"
-echo "██████╗ ███████╗████████╗███████╗██████╗ ███████╗███████╗"
-echo "██╔══██╗██╔════╝╚══██╔══╝██╔════╝██╔══██╗██╔════╝██╔════╝"
-echo "██████╔╝███████╗   ██║   █████╗  ██████╔╝███████╗███████╗"
-echo "██╔═══╝ ██╔════╝   ██║   ██╔══╝  ██╔═══╝ ╚════██╗╚════██╗"
-echo "██║     ███████╗   ██║   ███████╗██║     ███████╔╝██████╔╝"
-echo "╚═╝     ╚══════╝   ╚═╝   ╚══════╝╚═╝     ╚═════╝ ╚═════╝"
-echo -e "${NC}"
-
-# Input
-read -p "Enter domain name: " domain
-mkdir -p tools results
-
-# Install Tool Function
+# Check if the required tools are installed
 install_tool() {
     tool=$1
-    install_cmd=$2
-    if ! command -v "$tool" &> /dev/null; then
-        (eval "$install_cmd") & spinner "Installing $tool"
+    if ! command -v $tool &> /dev/null
+    then
+        echo "$tool not found, installing..."
+        progress_bar 20
+        if [[ "$tool" == "subfinder" ]]; then
+            go install github.com/projectdiscovery/subfinder/v2/cmd/subfinder@latest
+        elif [[ "$tool" == "gau" ]]; then
+            go install github.com/lc/gau/v2/cmd/gau@latest
+        elif [[ "$tool" == "httpx" ]]; then
+            go install github.com/projectdiscovery/httpx/cmd/httpx@latest
+        fi
+    else
+        echo "$tool is already installed"
     fi
 }
 
-# Tool Installation
-install_tool "subfinder" "go install -v github.com/projectdiscovery/subfinder/v2/cmd/subfinder@latest && mv ~/go/bin/subfinder /usr/local/bin/"
-install_tool "httpx" "go install -v github.com/projectdiscovery/httpx/cmd/httpx@latest && mv ~/go/bin/httpx /usr/local/bin/"
-install_tool "gau" "go install -v github.com/lc/gau/v2/cmd/gau@latest && mv ~/go/bin/gau /usr/local/bin/"
+# Install necessary tools
+echo "Installing tools..."
+install_tool "subfinder"
+install_tool "gau"
+install_tool "httpx"
 
-# Run subfinder (silent)
-echo -e "${GREEN}[+] Running subfinder...${NC}"
-subfinder -d "$domain" -silent > results/subdomains.txt
+# Run the tools
+echo "Running subfinder..."
+progress_bar 50
+subfinder -d example.com -o subdomains.txt
+echo "Running gau..."
+progress_bar 50
+gau example.com > gau_results.txt
+echo "Running httpx..."
+progress_bar 50
+httpx -l subdomains.txt -o httpx_results.txt
 
-# Run httpx
-echo -e "${GREEN}[+] Running httpx...${NC}"
-httpx -o results/subdomains.txt -silent -status-code -title > results/httpx_output.txt
-
-# Run gau
-echo -e "${GREEN}[+] Running gau...${NC}"
-gau "$domain" > results/gau_output.txt
-
-# Done
-echo -e "${GREEN}[✓] Recon completed. Results saved in 'results/' folder.${NC}"
+# Show completion message
+echo "Recon completed. Results saved in 'subdomains.txt', 'gau_results.txt', and 'httpx_results.txt'."
