@@ -12,52 +12,64 @@ echo -e "\e[0m"
 
 # Function to show the progress bar
 progress_bar() {
-    local total=$1
-    local current=0
-    while [ $current -le $total ]; do
-        local progress=$((current * 100 / total))
-        printf "\r[%-50s] %d%%" "$(printf '#%.0s' $(seq 1 $((progress / 2))))" "$progress"
-        sleep 0.1
-        ((current++))
+    local pid=$!
+    local delay=0.1
+    local spin='-\|/'
+    local i=0
+    echo -n ' '
+    while ps -p $pid > /dev/null; do
+        i=$(( (i+1) %4 ))
+        echo -n "\r${spin:i:1}"
+        sleep $delay
     done
-    echo
+    echo -n ' '
 }
 
-# Check if the required tools are installed
-install_tool() {
-    tool=$1
-    if ! command -v $tool &> /dev/null
-    then
-        echo "$tool not found, installing..."
-        progress_bar 20
-        if [[ "$tool" == "subfinder" ]]; then
-            go install github.com/projectdiscovery/subfinder/v2/cmd/subfinder@latest
-        elif [[ "$tool" == "gau" ]]; then
-            go install github.com/lc/gau/v2/cmd/gau@latest
-        elif [[ "$tool" == "httpx" ]]; then
-            go install github.com/projectdiscovery/httpx/cmd/httpx@latest
-        fi
-    else
-        echo "$tool is already installed"
+# Function to install tools quietly
+install_tools() {
+    echo "Installing tools silently..."
+    
+    # Install subfinder if not installed
+    if ! command -v subfinder &>/dev/null; then
+        go install github.com/projectdiscovery/subfinder/v2/cmd/subfinder@latest &>/dev/null &
+        progress_bar $!
+    fi
+
+    # Install gau if not installed
+    if ! command -v gau &>/dev/null; then
+        go install github.com/lc/gau/v2/cmd/gau@latest &>/dev/null &
+        progress_bar $!
+    fi
+
+    # Install httpx if not installed
+    if ! command -v httpx &>/dev/null; then
+        go install github.com/projectdiscovery/httpx/cmd/httpx@latest &>/dev/null &
+        progress_bar $!
     fi
 }
 
-# Install necessary tools
-echo "Installing tools..."
-install_tool "subfinder"
-install_tool "gau"
-install_tool "httpx"
+# Set a default target if none provided
+TARGET=${1:-example.com}
+
+# Run tools on a default domain
+run_tools() {
+    echo "Running subfinder on $TARGET..."
+    subfinder -d $TARGET -o subdomains.txt &
+    progress_bar $!
+
+    echo "Running gau on $TARGET..."
+    gau $TARGET > gau_results.txt &
+    progress_bar $!
+
+    echo "Running httpx on $TARGET..."
+    httpx -l subdomains.txt -o httpx_results.txt &
+    progress_bar $!
+
+    echo "Recon completed. Results saved in 'subdomains.txt', 'gau_results.txt', and 'httpx_results.txt'."
+}
+
+# Install tools in silence
+install_tools
 
 # Run the tools
-echo "Running subfinder..."
-progress_bar 50
-subfinder -d example.com -o subdomains.txt
-echo "Running gau..."
-progress_bar 50
-gau example.com > gau_results.txt
-echo "Running httpx..."
-progress_bar 50
-httpx -l subdomains.txt -o httpx_results.txt
-
-# Show completion message
-echo "Recon completed. Results saved in 'subdomains.txt', 'gau_results.txt', and 'httpx_results.txt'."
+run_tools
