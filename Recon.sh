@@ -45,7 +45,7 @@ run_httpx() {
     
     DOMAIN=$1
     echo "Running httpx on $DOMAIN..."
-    httpx -l "$DOMAIN" -o httpx_output.txt
+    httpx  "$DOMAIN" -o httpx_output.txt
 }
 
 # Main script execution
