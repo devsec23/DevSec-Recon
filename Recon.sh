@@ -4,15 +4,17 @@
 install_tools_silently() {
     echo "Installing tools silently..."
     
-    # Install subfinder silently, no output shown to the user
+    # Install subfinder silently
     go install github.com/projectdiscovery/subfinder/v2/cmd/subfinder@latest &>/dev/null
+    
+    # Install gau silently
+    go install github.com/lc/gau/v2/cmd/gau@latest &>/dev/null
 
-    # Add any other tools you need to install here (in a similar silent manner)
-    # go install github.com/projectdiscovery/httpx/cmd/httpx@latest &>/dev/null
-    # go install github.com/tomnomnom/assetfinder@latest &>/dev/null
+    # Install httpx silently
+    go install github.com/projectdiscovery/httpx/cmd/httpx@latest &>/dev/null
 }
 
-# Function to run the tool (subfinder) after installing it
+# Function to run the tools (subfinder, gau, httpx) after installing them
 run_subfinder() {
     if [ -z "$1" ]; then
         echo "No domain provided. Exiting..."
@@ -21,7 +23,29 @@ run_subfinder() {
     
     DOMAIN=$1
     echo "Running subfinder on $DOMAIN..."
-    subfinder -d "$DOMAIN" -o output.txt
+    subfinder -d "$DOMAIN" -o subfinder_output.txt
+}
+
+run_gau() {
+    if [ -z "$1" ]; then
+        echo "No domain provided. Exiting..."
+        exit 1
+    fi
+    
+    DOMAIN=$1
+    echo "Running gau on $DOMAIN..."
+    gau "$DOMAIN" -o gau_output.txt
+}
+
+run_httpx() {
+    if [ -z "$1" ]; then
+        echo "No domain provided. Exiting..."
+        exit 1
+    fi
+    
+    DOMAIN=$1
+    echo "Running httpx on $DOMAIN..."
+    httpx -l "$DOMAIN" -o httpx_output.txt
 }
 
 # Main script execution
@@ -32,5 +56,9 @@ echo "Tools installed successfully."
 echo "Please enter the domain to scan:"
 read DOMAIN
 
-# Run the tool with the user-provided domain
+# Run the tools with the user-provided domain
 run_subfinder "$DOMAIN"
+run_gau "$DOMAIN"
+run_httpx "$DOMAIN"
+
+echo "All tools executed successfully."
