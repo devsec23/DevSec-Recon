@@ -57,7 +57,7 @@ run_httpx() {
     echo -e "${GREEN}Number of URLs found: $(wc -l < combined_output.txt)${NC}"
 
     # تمرير الملف إلى httpx لفحص الروابط الحية
-    httpx -l combined_output.txt -status-code -title -follow-redirects -o httpx_output.txt
+    httpx  combined_output.txt -status-code -title -follow-redirects > httpx_output.txt
 
     # عرض عدد الروابط الحية
     live_urls=$(grep -c "200" httpx_output.txt)
