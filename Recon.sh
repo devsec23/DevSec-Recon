@@ -57,7 +57,7 @@ subfinder -d "$domain" -silent > results/subdomains.txt
 
 # Run httpx
 echo -e "${GREEN}[+] Running httpx...${NC}"
-httpx -l results/subdomains.txt -silent -status-code -title > results/httpx_output.txt
+httpx -o results/subdomains.txt -silent -status-code -title > results/httpx_output.txt
 
 # Run gau
 echo -e "${GREEN}[+] Running gau...${NC}"
