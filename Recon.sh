@@ -2,7 +2,7 @@
 
 # Function to install tools silently without showing the download process
 install_tools_silently() {
-    echo "Installing tools silently..."
+    echo "Installing tools ..."
     
     # Install subfinder silently
     go install github.com/projectdiscovery/subfinder/v2/cmd/subfinder@latest &>/dev/null
@@ -34,7 +34,7 @@ run_gau() {
     
     DOMAIN=$1
     echo "Running gau on $DOMAIN..."
-    gau "$DOMAIN" -o gau_output.txt
+    gau "$DOMAIN" --o gau_output.txt
 }
 
 run_httpx() {
