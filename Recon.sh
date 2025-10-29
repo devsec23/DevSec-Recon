@@ -2,7 +2,7 @@
 #=====================================================================
 # Recon Tool – Subfinder + Gau + Httpx
 # Author: DevSec Zone
-# Version: 3.1 (FIXED PATH + Auto Reload + Progress + ETA)
+# Version: 3.2 (FIXED gau --silent + PATH + Progress + ETA)
 #=====================================================================
 
 set -euo pipefail
@@ -38,7 +38,7 @@ msg() {
 }
 
 #=====================================================================
-# 1. AUTO RELOAD PATH (FIX)
+# 1. AUTO RELOAD PATH (FIXED)
 #=====================================================================
 export PATH="$PATH:$HOME/go/bin"
 [[ -f "$HOME/.bashrc" ]] && grep -q "go/bin" "$HOME/.bashrc" || echo 'export PATH=$PATH:$HOME/go/bin' >> "$HOME/.bashrc"
@@ -114,7 +114,6 @@ check_and_install_tools() {
         install_tool "$bin" "$repo" "$name"
     done
 
-    # FORCE RELOAD PATH AFTER INSTALL
     export PATH="$PATH:$HOME/go/bin"
     msg "$GREEN" "done" "All tools are ready!"
 }
@@ -150,7 +149,7 @@ setup_workspace() {
 }
 
 #=====================================================================
-# 4. SCAN PHASES
+# 4. SCAN PHASES (FIXED: gau without --silent)
 #=====================================================================
 run_subfinder() {
     msg "$GREEN" "subfinder" "$DOMAIN"
@@ -159,7 +158,8 @@ run_subfinder() {
 
 run_gau() {
     msg "$GREEN" "gau" "$DOMAIN"
-    gau "$DOMAIN" --silent > gau.txt || { msg "$RED" "error" "gau failed"; exit 1; }
+    # تم إزالة --silent واستبداله بـ redirect إلى /dev/null
+    gau "$DOMAIN" > gau.txt 2>/dev/null || { msg "$RED" "error" "gau failed"; exit 1; }
 }
 
 merge_urls() {
