@@ -2,7 +2,7 @@
 #=====================================================================
 # Recon Tool – Subfinder + Gau + Httpx
 # Author: DevSec Zone
-# Version: 3.0 (Fully Organized + Check → Install → Scan)
+# Version: 3.1 (FIXED PATH + Auto Reload + Progress + ETA)
 #=====================================================================
 
 set -euo pipefail
@@ -38,7 +38,13 @@ msg() {
 }
 
 #=====================================================================
-# 1. CHECK & INSTALL TOOLS (Go + subfinder + gau + httpx)
+# 1. AUTO RELOAD PATH (FIX)
+#=====================================================================
+export PATH="$PATH:$HOME/go/bin"
+[[ -f "$HOME/.bashrc" ]] && grep -q "go/bin" "$HOME/.bashrc" || echo 'export PATH=$PATH:$HOME/go/bin' >> "$HOME/.bashrc"
+
+#=====================================================================
+# 2. CHECK & INSTALL TOOLS
 #=====================================================================
 TOOLS=(
     "go|go|Install Go Language"
@@ -54,8 +60,7 @@ install_go() {
     fi
     msg "$YELLOW" "install" "Go Language"
     pkg install -y golang &>/dev/null
-    echo 'export PATH=$PATH:$HOME/go/bin' >> "$HOME/.bashrc"
-    export PATH=$PATH:$HOME/go/bin
+    export PATH="$PATH:$HOME/go/bin"
     msg "$GREEN" "done" "Go installed"
 }
 
@@ -72,7 +77,7 @@ install_tool() {
     go install "$repo" &>/dev/null &
     local pid=$!
     local start=$(date +%s)
-    local est=90  # estimated seconds
+    local est=90
 
     while kill -0 $pid 2>/dev/null; do
         local now=$(date +%s)
@@ -89,7 +94,13 @@ install_tool() {
     done
     wait $pid 2>/dev/null || true
     printf "\n"
-    [[ -f "$path" ]] && msg "$GREEN" "done" "$name installed" || msg "$RED" "error" "$name failed"
+
+    if [[ -f "$path" ]]; then
+        msg "$GREEN" "done" "$name installed"
+    else
+        msg "$RED" "error" "$name failed to install"
+        exit 1
+    fi
 }
 
 check_and_install_tools() {
@@ -103,11 +114,13 @@ check_and_install_tools() {
         install_tool "$bin" "$repo" "$name"
     done
 
+    # FORCE RELOAD PATH AFTER INSTALL
+    export PATH="$PATH:$HOME/go/bin"
     msg "$GREEN" "done" "All tools are ready!"
 }
 
 #=====================================================================
-# 2. INPUT & WORKSPACE
+# 3. INPUT & WORKSPACE
 #=====================================================================
 DOMAIN=""
 WORKDIR=""
@@ -137,16 +150,16 @@ setup_workspace() {
 }
 
 #=====================================================================
-# 3. SCAN PHASES
+# 4. SCAN PHASES
 #=====================================================================
 run_subfinder() {
     msg "$GREEN" "subfinder" "$DOMAIN"
-    subfinder -d "$DOMAIN" -silent -o subfinder.txt
+    subfinder -d "$DOMAIN" -silent -o subfinder.txt || { msg "$RED" "error" "subfinder failed"; exit 1; }
 }
 
 run_gau() {
     msg "$GREEN" "gau" "$DOMAIN"
-    gau "$DOMAIN" --silent > gau.txt
+    gau "$DOMAIN" --silent > gau.txt || { msg "$RED" "error" "gau failed"; exit 1; }
 }
 
 merge_urls() {
@@ -158,7 +171,7 @@ merge_urls() {
 
 run_httpx() {
     msg "$GREEN" "httpx" ""
-    httpx -list combined.txt -silent -status-code -title -follow-redirects -o httpx.txt
+    httpx -list combined.txt -silent -status-code -title -follow-redirects -o httpx.txt || { msg "$RED" "error" "httpx failed"; exit 1; }
     local live=$(grep -c "200" httpx.txt || echo 0)
     msg "$GREEN" "live" "$live"
 }
@@ -182,25 +195,19 @@ generate_report() {
 }
 
 #=====================================================================
-# 4. MAIN EXECUTION
+# 5. MAIN
 #=====================================================================
 main() {
     parse_args "$@"
 
-    # --- Get Domain ---
     [[ -z "$DOMAIN" ]] && {
         msg "$CYAN" "domain"
         read -r DOMAIN
     }
     [[ -z "$DOMAIN" ]] && { msg "$RED" "error" "No domain provided"; exit 1; }
 
-    # --- Phase 1: Tools ---
     check_and_install_tools
-
-    # --- Phase 2: Workspace ---
     setup_workspace
-
-    # --- Phase 3: Scanning ---
     run_subfinder
     run_gau
     merge_urls
@@ -210,5 +217,4 @@ main() {
     echo -e "${GREEN}Recon completed successfully!${NC}"
 }
 
-# Run
 main "$@"
