@@ -1,98 +1,100 @@
 #!/usr/bin/env bash
 #=====================================================================
 # Recon Tool – Subfinder + Gau + Httpx
-# المؤلف:  DevSec Zone
-# الإصدار: 2.0
+# Author: DevSec Zone
+# Version: 2.1 (English + Progress Bar + ETA)
 #=====================================================================
 
-set -euo pipefail   # أمان أكثر
+set -euo pipefail
 
-# ---------- ألوان ----------
+# ---------- Colors ----------
 GREEN='\033[0;32m'
 RED='\033[0;31m'
 YELLOW='\033[1;33m'
+BLUE='\033[0;34m'
 NC='\033[0m'
 
-# ---------- لغة الرسائل ----------
-LANG="ar"   # غيّر إلى "en" للإنجليزية
-
+# ---------- Messages ----------
 msg() {
     local color=$1; shift
-    if [[ $LANG == "ar" ]]; then
-        case $1 in
-            "install")   echo -e "${color}جاري تثبيت الأدوات …${NC}" ;;
-            "done")      echo -e "${color}تم التثبيت بنجاح${NC}" ;;
-            "domain")    echo -e "${color}أدخل الدومين للمسح:${NC}" ;;
-            "subfinder") echo -e "${color}جاري تشغيل subfinder على $2 …${NC}" ;;
-            "gau")       echo -e "${color}جاري تشغيل gau على $2 …${NC}" ;;
-            "httpx")     echo -e "${color}جاري فحص الروابط الحية …${NC}" ;;
-            "live")      echo -e "${color}عدد الروابط الحية: $2${NC}" ;;
-            "total")     echo -e "${color}إجمالي الروابط المدمجة: $2${NC}" ;;
-            "report")    echo -e "${color}تم إنشاء التقرير في $2${NC}" ;;
-            "error")     echo -e "${RED}خطأ: $2${NC}" ;;
-            *)           echo -e "${color}$1${NC}" ;;
-        esac
-    else
-        case $1 in
-            "install")   echo -e "${color}Installing tools …${NC}" ;;
-            "done")      echo -e "${color}Installation done${NC}" ;;
-            "domain")    echo -e "${color}Enter domain to scan:${NC}" ;;
-            "subfinder") echo -e "${color}Running subfinder on $2 …${NC}" ;;
-            "gau")       echo -e "${color}Running gau on $2 …${NC}" ;;
-            "httpx")     echo -e "${color}Probing live URLs …${NC}" ;;
-            "live")      echo -e "${color}Live URLs: $2${NC}" ;;
-            "total")     echo -e "${color}Total merged URLs: $2${NC}" ;;
-            "report")    echo -e "${color}Report saved to $2${NC}" ;;
-            "error")     echo -e "${RED}ERROR: $2${NC}" ;;
-            *)           echo -e "${color}$1${NC}" ;;
-        esac
-    fi
+    case $1 in
+        "install")   echo -e "${color}Installing tools...${NC}" ;;
+        "done")      echo -e "${color}Installation completed${NC}" ;;
+        "domain")    echo -e "${color}Enter domain to scan:${NC}" ;;
+        "subfinder") echo -e "${color}Running subfinder on $2...${NC}" ;;
+        "gau")       echo -e "${color}Running gau on $2...${NC}" ;;
+        "httpx")     echo -e "${color}Probing live URLs...${NC}" ;;
+        "live")      echo -e "${color}Live URLs: $2${NC}" ;;
+        "total")     echo -e "${color}Total merged URLs: $2${NC}" ;;
+        "report")    echo -e "${color}Report saved to $2${NC}" ;;
+        "error")     echo -e "${RED}ERROR: $2${NC}" ;;
+        *)           echo -e "${color}$1${NC}" ;;
+    esac
 }
 
-# ---------- تثبيت Go إذا لم يكن موجود ----------
+# ---------- Install Go if missing ----------
 install_go() {
     if ! command -v go &>/dev/null; then
         msg "$YELLOW" "install"
         pkg install -y golang &>/dev/null
-        # إضافة go bin إلى PATH دائمًا
         echo 'export PATH=$PATH:$HOME/go/bin' >> "$HOME/.bashrc"
         export PATH=$PATH:$HOME/go/bin
     fi
 }
 
-# ---------- التحقق من وجود الأداة ----------
+# ---------- Check if tool is installed ----------
 tool_installed() {
     local bin=$1
     [[ -f "$HOME/go/bin/$bin" ]] || return 1
 }
 
-# ---------- تثبيت الأدوات (صامت) ----------
-install_tool() {
+# ---------- Progress Bar with ETA ----------
+install_with_progress() {
     local repo=$1 bin=$2
     if tool_installed "$bin"; then
         return 0
     fi
-    msg "$YELLOW" "install"
+
+    echo -e "${YELLOW}Installing $bin...${NC}"
+
+    # Start installation in background
     go install "$repo@latest" &>/dev/null &
     local pid=$!
-    # شريط تقدّم بسيط
+    local start_time=$(date +%s)
+    local elapsed=0
+    local estimated_total=90  # average install time in seconds (adjust if needed)
+
     while kill -0 $pid 2>/dev/null; do
-        printf "."
+        elapsed=$(( $(date +%s) - start_time ))
+        if (( elapsed > 0 )); then
+            local percent=$(( (elapsed * 100) / estimated_total ))
+            (( percent > 100 )) && percent=100
+            local remaining=$(( estimated_total - elapsed ))
+            (( remaining < 0 )) && remaining=0
+
+            # Progress bar
+            local filled=$(( percent / 2 ))
+            local empty=$(( 50 - filled ))
+            printf "\r[${BLUE}%-${filled}s%-${empty}s${NC}] %3d%% | ETA: %ds" \
+                "$(printf '%*s' "$filled" '' | tr ' ' '#')" \
+                "$(printf '%*s' "$empty" '' | tr ' ' '-')" \
+                "$percent" "$remaining"
+        fi
         sleep 1
     done
-    wait $pid
+    wait $pid 2>/dev/null || true
     printf "\n"
 }
 
 install_tools() {
     install_go
-    install_tool "github.com/projectdiscovery/subfinder/v2/cmd/subfinder" "subfinder"
-    install_tool "github.com/lc/gau/v2/cmd/gau"                       "gau"
-    install_tool "github.com/projectdiscovery/httpx/cmd/httpx"       "httpx"
+    install_with_progress "github.com/projectdiscovery/subfinder/v2/cmd/subfinder" "subfinder"
+    install_with_progress "github.com/lc/gau/v2/cmd/gau" "gau"
+    install_with_progress "github.com/projectdiscovery/httpx/cmd/httpx" "httpx"
     msg "$GREEN" "done"
 }
 
-# ---------- معالجة الإدخال ----------
+# ---------- Parse arguments ----------
 DOMAIN=""
 
 parse_args() {
@@ -104,17 +106,18 @@ parse_args() {
                 ;;
             -h|--help)
                 echo "Usage: $0 [-d <domain>]"
+                echo "Example: $0 -d example.com"
                 exit 0
                 ;;
             *)
-                msg "$RED" "error" "خيار غير معروف: $1"
+                msg "$RED" "error" "Unknown option: $1"
                 exit 1
                 ;;
         esac
     done
 }
 
-# ---------- إنشاء مجلد عمل ----------
+# ---------- Setup workspace ----------
 setup_workspace() {
     local d=$(echo "$DOMAIN" | tr '[:upper:]' '[:lower:]')
     WORKDIR="$HOME/recon-$d"
@@ -122,7 +125,7 @@ setup_workspace() {
     cd "$WORKDIR"
 }
 
-# ---------- تشغيل الأدوات ----------
+# ---------- Run tools ----------
 run_subfinder() {
     msg "$GREEN" "subfinder" "$DOMAIN"
     subfinder -d "$DOMAIN" -silent -o subfinder.txt
@@ -149,31 +152,30 @@ run_httpx() {
 generate_report() {
     local report="report.txt"
     {
-        echo "=== تقرير Recon لـ $DOMAIN ==="
-        echo "تاريخ: $(date)"
+        echo "=== Recon Report for $DOMAIN ==="
+        echo "Date: $(date)"
         echo
-        echo "Subdomains  : $(wc -l < subfinder.txt)   (subfinder.txt)"
-        echo "URLs (gau)  : $(wc -l < gau.txt)       (gau.txt)"
+        echo "Subdomains  : $(wc -l < subfinder.txt 2>/dev/null || echo 0)   (subfinder.txt)"
+        echo "URLs (gau)  : $(wc -l < gau.txt 2>/dev/null || echo 0)       (gau.txt)"
         echo "Merged URLs : $(wc -l < combined.txt)  (combined.txt)"
-        echo "Live URLs   : $(grep -c "200" httpx.txt) (httpx.txt)"
+        echo "Live URLs   : $(grep -c "200" httpx.txt || echo 0) (httpx.txt)"
         echo
-        echo "=== أول 10 روابط حية ==="
+        echo "=== First 10 Live URLs ==="
         grep "200" httpx.txt | head -10
     } > "$report"
     msg "$GREEN" "report" "$WORKDIR/$report"
 }
 
-# ---------- التنفيذ الرئيسي ----------
+# ---------- Main ----------
 main() {
     parse_args "$@"
 
-    # إذا لم يُمرر دومين من سطر الأوامر → طلب إدخال
     if [[ -z "$DOMAIN" ]]; then
         msg "$YELLOW" "domain"
         read -r DOMAIN
     fi
 
-    [[ -z "$DOMAIN" ]] && { msg "$RED" "error" "لم يتم إدخال دومين"; exit 1; }
+    [[ -z "$DOMAIN" ]] && { msg "$RED" "error" "No domain provided"; exit 1; }
 
     install_tools
     setup_workspace
@@ -184,8 +186,7 @@ main() {
     run_httpx
     generate_report
 
-    msg "$GREEN" "All tools executed successfully."
+    echo -e "${GREEN}All tools executed successfully.${NC}"
 }
 
-# تشغيل الدالة الرئيسية
 main "$@"
