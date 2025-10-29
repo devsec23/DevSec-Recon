@@ -2,7 +2,7 @@
 #=====================================================================
 # Recon Tool – Subfinder + Gau + Httpx
 # Author: DevSec Zone
-# Version: 2.1 (English + Progress Bar + ETA)
+# Version: 3.0 (Fully Organized + Check → Install → Scan)
 #=====================================================================
 
 set -euo pipefail
@@ -12,120 +12,133 @@ GREEN='\033[0;32m'
 RED='\033[0;31m'
 YELLOW='\033[1;33m'
 BLUE='\033[0;34m'
+CYAN='\033[0;36m'
 NC='\033[0m'
 
 # ---------- Messages ----------
 msg() {
     local color=$1; shift
     case $1 in
-        "install")   echo -e "${color}Installing tools...${NC}" ;;
-        "done")      echo -e "${color}Installation completed${NC}" ;;
-        "domain")    echo -e "${color}Enter domain to scan:${NC}" ;;
-        "subfinder") echo -e "${color}Running subfinder on $2...${NC}" ;;
-        "gau")       echo -e "${color}Running gau on $2...${NC}" ;;
-        "httpx")     echo -e "${color}Probing live URLs...${NC}" ;;
-        "live")      echo -e "${color}Live URLs: $2${NC}" ;;
-        "total")     echo -e "${color}Total merged URLs: $2${NC}" ;;
-        "report")    echo -e "${color}Report saved to $2${NC}" ;;
+        "check")     echo -e "${CYAN}[CHECK] $2${NC}" ;;
+        "missing")   echo -e "${YELLOW}[MISSING] $2${NC}" ;;
+        "install")   echo -e "${YELLOW}[INSTALL] $2...${NC}" ;;
+        "done")      echo -e "${GREEN}[DONE] $2${NC}" ;;
+        "skip")      echo -e "${BLUE}[SKIP] $2${NC}" ;;
+        "domain")    echo -e "${CYAN}Enter domain to scan:${NC}" ;;
+        "subfinder") echo -e "${GREEN}Running subfinder on $2...${NC}" ;;
+        "gau")       echo -e "${GREEN}Running gau on $2...${NC}" ;;
+        "merge")     echo -e "${YELLOW}Merging results...${NC}" ;;
+        "httpx")     echo -e "${GREEN}Probing live URLs...${NC}" ;;
+        "live")      echo -e "${GREEN}Live URLs: $2${NC}" ;;
+        "total")     echo -e "${YELLOW}Total merged URLs: $2${NC}" ;;
+        "report")    echo -e "${GREEN}Report → $2${NC}" ;;
         "error")     echo -e "${RED}ERROR: $2${NC}" ;;
         *)           echo -e "${color}$1${NC}" ;;
     esac
 }
 
-# ---------- Install Go if missing ----------
+#=====================================================================
+# 1. CHECK & INSTALL TOOLS (Go + subfinder + gau + httpx)
+#=====================================================================
+TOOLS=(
+    "go|go|Install Go Language"
+    "subfinder|github.com/projectdiscovery/subfinder/v2/cmd/subfinder@latest|Subdomain Enumerator"
+    "gau|github.com/lc/gau/v2/cmd/gau@latest|URL Fetcher"
+    "httpx|github.com/projectdiscovery/httpx/cmd/httpx@latest|HTTP Prober"
+)
+
 install_go() {
-    if ! command -v go &>/dev/null; then
-        msg "$YELLOW" "install"
-        pkg install -y golang &>/dev/null
-        echo 'export PATH=$PATH:$HOME/go/bin' >> "$HOME/.bashrc"
-        export PATH=$PATH:$HOME/go/bin
+    if command -v go &>/dev/null; then
+        msg "$BLUE" "skip" "Go is already installed"
+        return 0
     fi
+    msg "$YELLOW" "install" "Go Language"
+    pkg install -y golang &>/dev/null
+    echo 'export PATH=$PATH:$HOME/go/bin' >> "$HOME/.bashrc"
+    export PATH=$PATH:$HOME/go/bin
+    msg "$GREEN" "done" "Go installed"
 }
 
-# ---------- Check if tool is installed ----------
-tool_installed() {
-    local bin=$1
-    [[ -f "$HOME/go/bin/$bin" ]] || return 1
-}
+install_tool() {
+    local bin=$1 repo=$2 name=$3
+    local path="$HOME/go/bin/$bin"
 
-# ---------- Progress Bar with ETA ----------
-install_with_progress() {
-    local repo=$1 bin=$2
-    if tool_installed "$bin"; then
+    if [[ -f "$path" ]]; then
+        msg "$BLUE" "skip" "$name is already installed"
         return 0
     fi
 
-    echo -e "${YELLOW}Installing $bin...${NC}"
-
-    # Start installation in background
-    go install "$repo@latest" &>/dev/null &
+    msg "$YELLOW" "install" "$name"
+    go install "$repo" &>/dev/null &
     local pid=$!
-    local start_time=$(date +%s)
-    local elapsed=0
-    local estimated_total=90  # average install time in seconds (adjust if needed)
+    local start=$(date +%s)
+    local est=90  # estimated seconds
 
     while kill -0 $pid 2>/dev/null; do
-        elapsed=$(( $(date +%s) - start_time ))
-        if (( elapsed > 0 )); then
-            local percent=$(( (elapsed * 100) / estimated_total ))
-            (( percent > 100 )) && percent=100
-            local remaining=$(( estimated_total - elapsed ))
-            (( remaining < 0 )) && remaining=0
+        local now=$(date +%s)
+        local elapsed=$(( now - start ))
+        (( elapsed > est )) && elapsed=$est
+        local percent=$(( elapsed * 100 / est ))
+        local remain=$(( est - elapsed ))
+        (( remain < 0 )) && remain=0
 
-            # Progress bar
-            local filled=$(( percent / 2 ))
-            local empty=$(( 50 - filled ))
-            printf "\r[${BLUE}%-${filled}s%-${empty}s${NC}] %3d%% | ETA: %ds" \
-                "$(printf '%*s' "$filled" '' | tr ' ' '#')" \
-                "$(printf '%*s' "$empty" '' | tr ' ' '-')" \
-                "$percent" "$remaining"
-        fi
+        local bar=$(printf "%-${percent}s" "#" | tr ' ' '#')
+        local empty=$(printf "%-$((100 - percent))s" "-" | tr ' ' '-')
+        printf "\r[${BLUE}%s${NC}%s] %3d%% | ETA: %2ds" "$bar" "$empty" "$percent" "$remain"
         sleep 1
     done
     wait $pid 2>/dev/null || true
     printf "\n"
+    [[ -f "$path" ]] && msg "$GREEN" "done" "$name installed" || msg "$RED" "error" "$name failed"
 }
 
-install_tools() {
+check_and_install_tools() {
+    msg "$CYAN" "check" "Checking required tools..."
+
     install_go
-    install_with_progress "github.com/projectdiscovery/subfinder/v2/cmd/subfinder" "subfinder"
-    install_with_progress "github.com/lc/gau/v2/cmd/gau" "gau"
-    install_with_progress "github.com/projectdiscovery/httpx/cmd/httpx" "httpx"
-    msg "$GREEN" "done"
+
+    for tool in "${TOOLS[@]}"; do
+        IFS='|' read -r bin repo name <<< "$tool"
+        [[ "$bin" == "go" ]] && continue
+        install_tool "$bin" "$repo" "$name"
+    done
+
+    msg "$GREEN" "done" "All tools are ready!"
 }
 
-# ---------- Parse arguments ----------
+#=====================================================================
+# 2. INPUT & WORKSPACE
+#=====================================================================
 DOMAIN=""
+WORKDIR=""
 
 parse_args() {
     while [[ $# -gt 0 ]]; do
         case $1 in
-            -d|--domain)
-                DOMAIN="$2"
-                shift 2
-                ;;
+            -d|--domain) DOMAIN="$2"; shift 2 ;;
             -h|--help)
-                echo "Usage: $0 [-d <domain>]"
-                echo "Example: $0 -d example.com"
+                cat <<EOF
+Usage: $0 [-d <domain>]
+Example: $0 -d google.com
+EOF
                 exit 0
                 ;;
-            *)
-                msg "$RED" "error" "Unknown option: $1"
-                exit 1
-                ;;
+            *) msg "$RED" "error" "Unknown option: $1"; exit 1 ;;
         esac
     done
 }
 
-# ---------- Setup workspace ----------
 setup_workspace() {
     local d=$(echo "$DOMAIN" | tr '[:upper:]' '[:lower:]')
     WORKDIR="$HOME/recon-$d"
     mkdir -p "$WORKDIR"
     cd "$WORKDIR"
+    msg "$CYAN" "check" "Workspace: $WORKDIR"
 }
 
-# ---------- Run tools ----------
+#=====================================================================
+# 3. SCAN PHASES
+#=====================================================================
 run_subfinder() {
     msg "$GREEN" "subfinder" "$DOMAIN"
     subfinder -d "$DOMAIN" -silent -o subfinder.txt
@@ -137,6 +150,7 @@ run_gau() {
 }
 
 merge_urls() {
+    msg "$YELLOW" "merge" "Combining results..."
     cat subfinder.txt gau.txt 2>/dev/null | sort -u > combined.txt
     local total=$(wc -l < combined.txt)
     msg "$YELLOW" "total" "$total"
@@ -150,43 +164,51 @@ run_httpx() {
 }
 
 generate_report() {
-    local report="report.txt"
+    local report="REPORT.txt"
     {
-        echo "=== Recon Report for $DOMAIN ==="
-        echo "Date: $(date)"
-        echo
-        echo "Subdomains  : $(wc -l < subfinder.txt 2>/dev/null || echo 0)   (subfinder.txt)"
-        echo "URLs (gau)  : $(wc -l < gau.txt 2>/dev/null || echo 0)       (gau.txt)"
-        echo "Merged URLs : $(wc -l < combined.txt)  (combined.txt)"
-        echo "Live URLs   : $(grep -c "200" httpx.txt || echo 0) (httpx.txt)"
-        echo
-        echo "=== First 10 Live URLs ==="
+        echo "=== RECON REPORT ==="
+        echo "Target : $DOMAIN"
+        echo "Date   : $(date)"
+        echo "------------------------------------------------"
+        echo "Subdomains : $(wc -l < subfinder.txt 2>/dev/null || echo 0)"
+        echo "URLs (gau) : $(wc -l < gau.txt 2>/dev/null || echo 0)"
+        echo "Merged     : $(wc -l < combined.txt)"
+        echo "Live (200) : $(grep -c "200" httpx.txt || echo 0)"
+        echo "------------------------------------------------"
+        echo "Top 10 Live URLs:"
         grep "200" httpx.txt | head -10
     } > "$report"
     msg "$GREEN" "report" "$WORKDIR/$report"
 }
 
-# ---------- Main ----------
+#=====================================================================
+# 4. MAIN EXECUTION
+#=====================================================================
 main() {
     parse_args "$@"
 
-    if [[ -z "$DOMAIN" ]]; then
-        msg "$YELLOW" "domain"
+    # --- Get Domain ---
+    [[ -z "$DOMAIN" ]] && {
+        msg "$CYAN" "domain"
         read -r DOMAIN
-    fi
-
+    }
     [[ -z "$DOMAIN" ]] && { msg "$RED" "error" "No domain provided"; exit 1; }
 
-    install_tools
+    # --- Phase 1: Tools ---
+    check_and_install_tools
+
+    # --- Phase 2: Workspace ---
     setup_workspace
 
+    # --- Phase 3: Scanning ---
     run_subfinder
     run_gau
     merge_urls
     run_httpx
     generate_report
 
-    echo -e "${GREEN}All tools executed successfully.${NC}"
+    echo -e "${GREEN}Recon completed successfully!${NC}"
 }
 
+# Run
 main "$@"
